@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: pet-owner-dashboard
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node proxy-server.js
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false

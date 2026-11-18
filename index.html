@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pet Owner Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#0ea5e9',
+                        secondary: '#06b6d4',
+                        accent: '#0284c7',
+                        dark: '#0c4a6e',
+                        light: '#f0f9ff'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .page { display: none; }
+        .page.active { display: block; }
+
+        .dashboard-page { display: none; }
+        .dashboard-page.active { display: block; }
+
+        body {
+            background: #f5f5f5;
+            min-height: 100vh;
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .gradient-btn {
+            background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+            transition: all 0.3s ease;
+        }
+
+        .gradient-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(14, 165, 233, 0.3);
+        }
+        
+        .sidebar {
+            background: linear-gradient(180deg, #0c4a6e 0%, #075985 100%);
+        }
+        
+        .nav-link {
+            transition: all 0.3s ease;
+            border-radius: 12px;
+        }
+        
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(5px);
+        }
+        
+        .nav-link.active {
+            background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+            box-shadow: 0 4px 15px rgba(14, 165, 233, 0.4);
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .pet-card {
+            background: linear-gradient(145deg, #ffffff 0%, #f3f4f6 100%);
+            transition: all 0.3s ease;
+        }
+        
+        .pet-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        }
+        
+        .icon-circle {
+            background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+            box-shadow: 0 4px 15px rgba(14, 165, 233, 0.3);
+        }
+        
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal-content {
+            background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #0ea5e9;
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
+        }
+        
+        .chat-bubble-user {
+            background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+            border-radius: 20px 20px 5px 20px;
+        }
+        
+        .chat-bubble-ai {
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            border-radius: 20px 20px 20px 5px;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Auth Pages -->
+    <div id="auth-container">
+        
+        <!-- Login Page -->
+        <div id="login-page" class="page active">
+            <div class="min-h-screen flex items-center justify-center">
+                
+                <div class="glass-card p-8 rounded-3xl shadow-2xl w-full max-w-md fade-in">
+                    <!-- Banner Image -->  <img src="images/loginImage.png" alt="Puppies Banner" class="w-full h-48 object-cover">
+                    <div class="relative -mx-8 -mt-8 mb-6 rounded-t-3xl overflow-hidden">
+                      
+                        <div class="absolute inset-0 bg-gradient-to-b from-transparent to-white/20"></div>
+                    </div>
+                    
+                    <div class="text-center mb-8 -mt-16 relative z-10">
+                        <div class="icon-circle w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white shadow-lg">
+                            <i class="fas fa-paw text-4xl text-white"></i>
+                        </div>
+                        <h1 class="text-3xl font-bold text-gray-800">Pet Owner Portal</h1>
+                        <p class="text-gray-600 mt-2">Login to manage your pets</p>
+                    </div>
+                    <form id="login-form" class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                            <input type="email" id="login-email" required 
+                                class="w-full px-4 py-3 border border-gray-200 rounded-xl transition">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                            <input type="password" id="login-password" required 
+                                class="w-full px-4 py-3 border border-gray-200 rounded-xl transition">
+                        </div>
+                        <button type="submit" 
+                            class="w-full gradient-btn text-white py-3 rounded-xl font-semibold">
+                            Login
+                        </button>
+                    </form>
+                    <p class="text-center mt-6 text-gray-600">
+                        Don't have an account? 
+                        <a href="#" onclick="showPage('signup-page')" class="text-primary hover:underline font-medium">Sign up</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Signup Page -->
+        <div id="signup-page" class="page">
+            <div class="min-h-screen flex items-center justify-center">
+                <div class="glass-card p-8 rounded-3xl shadow-2xl w-full max-w-md fade-in">
+                    <!-- Banner Image -->  <img src="images/loginImage.png" alt="Puppies Banner" class="w-full h-48 object-cover">
+                    <div class="relative -mx-8 -mt-8 mb-6 rounded-t-3xl overflow-hidden">
+                      
+                        <div class="absolute inset-0 bg-gradient-to-b from-transparent to-white/20"></div>
+                    </div>
+                    
+                    <div class="text-center mb-8 -mt-16 relative z-10">
+                        <div class="icon-circle w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white shadow-lg">
+                            <i class="fas fa-paw text-4xl text-white"></i>
+                        </div>
+                        <h1 class="text-3xl font-bold text-gray-800">Create Account</h1>
+                        <p class="text-gray-600 mt-2">Join our pet care community</p>
+                    </div>
+                    <form id="signup-form" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
+                            <input type="text" id="signup-name" required 
+                                class="w-full px-4 py-3 border border-gray-200 rounded-xl transition">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                            <input type="email" id="signup-email" required 
+                                class="w-full px-4 py-3 border border-gray-200 rounded-xl transition">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+                            <input type="tel" id="signup-phone" required 
+                                class="w-full px-4 py-3 border border-gray-200 rounded-xl transition">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                            <input type="password" id="signup-password" required 
+                                class="w-full px-4 py-3 border border-gray-200 rounded-xl transition">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
+                            <input type="password" id="signup-confirm" required 
+                                class="w-full px-4 py-3 border border-gray-200 rounded-xl transition">
+                        </div>
+                        <button type="submit" 
+                            class="w-full gradient-btn text-white py-3 rounded-xl font-semibold">
+                            Create Account
+                        </button>
+                    </form>
+                    <p class="text-center mt-6 text-gray-600">
+                        Already have an account? 
+                        <a href="#" onclick="showPage('login-page')" class="text-primary hover:underline font-medium">Login</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Container -->
+    <div id="dashboard-container" class="hidden">
+        <!-- Sidebar -->
+        <div class="flex">
+            <aside class="sidebar w-64 shadow-2xl min-h-screen fixed left-0 top-0">
+                <div class="p-6 border-b border-white/10">
+                    <div class="flex items-center space-x-3">
+                        <div class="icon-circle w-12 h-12 rounded-full flex items-center justify-center">
+                            <i class="fas fa-paw text-2xl text-white"></i>
+                        </div>
+                        <span class="text-xl font-bold text-white">PetCare</span>
+                    </div>
+                </div>
+                <nav class="p-4">
+                    <ul class="space-y-2">
+                        <li>
+                            <a href="#" onclick="showDashboardPage('dashboard')" 
+                                class="nav-link flex items-center space-x-3 px-4 py-3 text-white/80 hover:text-white">
+                                <i class="fas fa-home"></i>
+                                <span>Dashboard</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" onclick="showDashboardPage('pets')" 
+                                class="nav-link flex items-center space-x-3 px-4 py-3 text-white/80 hover:text-white">
+                                <i class="fas fa-dog"></i>
+                                <span>My Pets</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" onclick="showDashboardPage('appointments')" 
+                                class="nav-link flex items-center space-x-3 px-4 py-3 text-white/80 hover:text-white">
+                                <i class="fas fa-calendar-check"></i>
+                                <span>Appointments</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" onclick="showDashboardPage('prescriptions')" 
+                                class="nav-link flex items-center space-x-3 px-4 py-3 text-white/80 hover:text-white">
+                                <i class="fas fa-pills"></i>
+                                <span>Prescriptions</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" onclick="showDashboardPage('history')" 
+                                class="nav-link flex items-center space-x-3 px-4 py-3 text-white/80 hover:text-white">
+                                <i class="fas fa-history"></i>
+                                <span>History</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" onclick="showDashboardPage('ai-assistant')" 
+                                class="nav-link flex items-center space-x-3 px-4 py-3 text-white/80 hover:text-white">
+                                <i class="fas fa-robot"></i>
+                                <span>AI Assistant</span>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+                <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10">
+                    <button onclick="logout()" 
+                        class="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-white/10 text-white rounded-xl hover:bg-white/20 transition">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Logout</span>
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="ml-64 flex-1 p-8" style="background: #f5f5f5;">
+                <!-- Dashboard Home -->
+                <div id="dashboard-page" class="dashboard-page active">
+                    <div class="mb-8 fade-in">
+                        <h1 class="text-3xl font-bold text-gray-800">Welcome back, <span id="user-name">User</span>!</h1>
+                        <p class="text-gray-600 mt-2">Here's an overview of your pets and appointments</p>
+                    </div>
+
+                    <!-- Stats Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                        <div class="stat-card p-6 rounded-2xl">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 text-sm">Total Pets</p>
+                                    <p class="text-3xl font-bold text-gray-800" id="total-pets">0</p>
+                                </div>
+                                <div class="icon-circle w-12 h-12 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-paw text-white text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="stat-card p-6 rounded-2xl">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 text-sm">Upcoming Appointments</p>
+                                    <p class="text-3xl font-bold text-gray-800" id="upcoming-appointments">0</p>
+                                </div>
+                                <div class="icon-circle w-12 h-12 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-calendar text-white text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="stat-card p-6 rounded-2xl">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 text-sm">Active Prescriptions</p>
+                                    <p class="text-3xl font-bold text-gray-800" id="active-prescriptions">0</p>
+                                </div>
+                                <div class="icon-circle w-12 h-12 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-pills text-white text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="stat-card p-6 rounded-2xl">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 text-sm">Visits This Year</p>
+                                    <p class="text-3xl font-bold text-gray-800" id="total-visits">0</p>
+                                </div>
+                                <div class="icon-circle w-12 h-12 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-stethoscope text-white text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Actions -->
+                    <div class="glass-card p-6 rounded-2xl shadow-lg mb-8">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">Quick Actions</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <button onclick="showDashboardPage('pets'); openAddPetModal()" 
+                                class="gradient-btn flex items-center justify-center space-x-2 p-4 text-white rounded-xl">
+                                <i class="fas fa-plus-circle"></i>
+                                <span>Add New Pet</span>
+                            </button>
+                            <button onclick="showDashboardPage('appointments'); openBookAppointmentModal()" 
+                                class="gradient-btn flex items-center justify-center space-x-2 p-4 text-white rounded-xl">
+                                <i class="fas fa-calendar-plus"></i>
+                                <span>Book Appointment</span>
+                            </button>
+                            <button onclick="showDashboardPage('ai-assistant')" 
+                                class="gradient-btn flex items-center justify-center space-x-2 p-4 text-white rounded-xl">
+                                <i class="fas fa-robot"></i>
+                                <span>Ask AI Assistant</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity -->
+                    <div class="glass-card p-6 rounded-2xl shadow-lg">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">Recent Activity</h2>
+                        <div id="recent-activity" class="space-y-4">
+                            <p class="text-gray-500 text-center py-8">No recent activity</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pets Page -->
+                <div id="pets-page" class="dashboard-page">
+                    <div class="flex justify-between items-center mb-8">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-800">My Pets</h1>
+                            <p class="text-gray-600 mt-2">Manage your pets' information</p>
+                        </div>
+                        <button onclick="openAddPetModal()" 
+                            class="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
+                            <i class="fas fa-plus"></i>
+                            <span>Add Pet</span>
+                        </button>
+                    </div>
+                    <div id="pets-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <p class="text-gray-500 text-center py-8 col-span-full">No pets added yet</p>
+                    </div>
+                </div>
+
+                <!-- Appointments Page -->
+                <div id="appointments-page" class="dashboard-page">
+                    <div class="flex justify-between items-center mb-8">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-800">Appointments</h1>
+                            <p class="text-gray-600 mt-2">Schedule and manage appointments</p>
+                        </div>
+                        <button onclick="openBookAppointmentModal()" 
+                            class="flex items-center space-x-2 px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition">
+                            <i class="fas fa-calendar-plus"></i>
+                            <span>Book Appointment</span>
+                        </button>
+                    </div>
+                    <div id="appointments-list" class="space-y-4">
+                        <p class="text-gray-500 text-center py-8">No appointments scheduled</p>
+                    </div>
+                </div>
+
+                <!-- Prescriptions Page -->
+                <div id="prescriptions-page" class="dashboard-page">
+                    <div class="flex justify-between items-center mb-8">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-800">Prescriptions</h1>
+                            <p class="text-gray-600 mt-2">View and manage your pets' medications</p>
+                        </div>
+                        <button onclick="openAddPrescriptionModal()" 
+                            class="flex items-center space-x-2 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition">
+                            <i class="fas fa-plus"></i>
+                            <span>Add Prescription</span>
+                        </button>
+                    </div>
+                    <div id="prescriptions-list" class="space-y-4">
+                        <p class="text-gray-500 text-center py-8">No prescriptions available</p>
+                    </div>
+                </div>
+
+                <!-- History Page -->
+                <div id="history-page" class="dashboard-page">
+                    <div class="mb-8">
+                        <h1 class="text-3xl font-bold text-gray-800">Medical History</h1>
+                        <p class="text-gray-600 mt-2">View complete medical records for your pets</p>
+                    </div>
+                    <div id="history-list" class="space-y-4">
+                        <p class="text-gray-500 text-center py-8">No medical history available</p>
+                    </div>
+                </div>
+
+                <!-- AI Assistant Page -->
+                <div id="ai-assistant-page" class="dashboard-page">
+                    <div class="mb-8">
+                        <h1 class="text-3xl font-bold text-gray-800">AI Assistant</h1>
+                        <p class="text-gray-600 mt-2">Get AI-powered pet care advice</p>
+                    </div>
+
+                    <!-- Model Selection -->
+                    <div class="bg-white p-6 rounded-xl shadow-md mb-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">Select AI Provider</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <button onclick="selectAIProvider('openai')" 
+                                class="ai-provider-btn p-4 border-2 rounded-lg hover:border-blue-500 transition" data-provider="openai">
+                                <i class="fas fa-brain text-2xl text-green-500 mb-2"></i>
+                                <p class="font-semibold">OpenAI</p>
+                            </button>
+                            <button onclick="selectAIProvider('nvidia')" 
+                                class="ai-provider-btn p-4 border-2 rounded-lg hover:border-blue-500 transition" data-provider="nvidia">
+                                <i class="fas fa-microchip text-2xl text-green-600 mb-2"></i>
+                                <p class="font-semibold">NVIDIA</p>
+                            </button>
+                            <button onclick="selectAIProvider('openrouter')" 
+                                class="ai-provider-btn p-4 border-2 rounded-lg hover:border-blue-500 transition" data-provider="openrouter">
+                                <i class="fas fa-route text-2xl text-purple-500 mb-2"></i>
+                                <p class="font-semibold">OpenRouter</p>
+                            </button>
+                        </div>
+                        <div id="model-selection" class="hidden">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Select Model</label>
+                            <select id="ai-model-select" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="">Select a model...</option>
+                            </select>
+                            <button onclick="refreshModels()" class="mt-2 text-blue-500 hover:underline text-sm">
+                                <i class="fas fa-sync-alt"></i> Refresh Models
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Chat Interface -->
+                    <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                        <div id="chat-messages" class="h-96 overflow-y-auto p-6 space-y-4">
+                            <div class="flex items-start space-x-3">
+                                <div class="bg-blue-100 p-2 rounded-full">
+                                    <i class="fas fa-robot text-blue-500"></i>
+                                </div>
+                                <div class="bg-gray-100 p-4 rounded-lg max-w-md">
+                                    <p class="text-gray-800">Hello! I'm your AI pet care assistant. How can I help you today?</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="border-t p-4">
+                            <div class="flex space-x-4">
+                                <input type="text" id="ai-input" placeholder="Ask about pet care, symptoms, nutrition..." 
+                                    class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    onkeypress="if(event.key === 'Enter') sendAIMessage()">
+                                <button onclick="sendAIMessage()" 
+                                    class="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Add Pet Modal -->
+    <div id="add-pet-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-2xl p-8 w-full max-w-md mx-4">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">Add New Pet</h2>
+                <button onclick="closeAddPetModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <form id="add-pet-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Pet Name</label>
+                    <input type="text" id="pet-name" required 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Species</label>
+                    <select id="pet-species" required 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="">Select species</option>
+                        <option value="dog">Dog</option>
+                        <option value="cat">Cat</option>
+                        <option value="bird">Bird</option>
+                        <option value="rabbit">Rabbit</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Breed</label>
+                    <input type="text" id="pet-breed" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Age</label>
+                    <input type="text" id="pet-age" placeholder="e.g., 2 years, 6 months" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Weight (kg)</label>
+                    <input type="number" id="pet-weight" step="0.1" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Gender</label>
+                    <select id="pet-gender" required 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="">Select gender</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                    </select>
+                </div>
+                <button type="submit" 
+                    class="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 transition font-semibold">
+                    Add Pet
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Book Appointment Modal -->
+    <div id="book-appointment-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-2xl p-8 w-full max-w-md mx-4">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">Book Appointment</h2>
+                <button onclick="closeBookAppointmentModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <form id="book-appointment-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Select Pet</label>
+                    <select id="appointment-pet" required 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                        <option value="">Select a pet</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                    <input type="date" id="appointment-date" required 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Time</label>
+                    <input type="time" id="appointment-time" required 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Type</label>
+                    <select id="appointment-type" required 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                        <option value="">Select type</option>
+                        <option value="checkup">General Checkup</option>
+                        <option value="vaccination">Vaccination</option>
+                        <option value="grooming">Grooming</option>
+                        <option value="emergency">Emergency</option>
+                        <option value="surgery">Surgery Consultation</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                    <textarea id="appointment-notes" rows="3" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        placeholder="Any specific concerns or symptoms..."></textarea>
+                </div>
+                <button type="submit" 
+                    class="w-full bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 transition font-semibold">
+                    Book Appointment
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Prescription Modal -->
+    <div id="add-prescription-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-2xl p-8 w-full max-w-md mx-4">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">Add Prescription</h2>
+                <button onclick="closeAddPrescriptionModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <form id="add-prescription-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Select Pet</label>
+                    <select id="prescription-pet" required 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                        <option value="">Select a pet</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Medication Name</label>
+                    <input type="text" id="prescription-medication" required 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        placeholder="e.g., Amoxicillin">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Dosage</label>
+                    <input type="text" id="prescription-dosage" required 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        placeholder="e.g., 250mg twice daily">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Frequency</label>
+                    <input type="text" id="prescription-frequency" required 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        placeholder="e.g., Every 12 hours">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Prescribing Veterinarian</label>
+                    <input type="text" id="prescription-vet" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        placeholder="e.g., Dr. Smith">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Instructions</label>
+                    <textarea id="prescription-instructions" rows="3" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        placeholder="Special instructions for administering medication..."></textarea>
+                </div>
+                <button type="submit" 
+                    class="w-full bg-purple-500 text-white py-3 rounded-lg hover:bg-purple-600 transition font-semibold">
+                    Add Prescription
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
