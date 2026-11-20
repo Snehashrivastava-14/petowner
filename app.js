@@ -125,30 +125,30 @@ async function loadUserDataFromSupabase() {
             pets = petsData;
         }
 
-        // Load appointments
+        // Load appointments with pet information
         const { data: appointmentsData, error: appointmentsError } = await supabaseClient
             .from('appointments')
-            .select('*')
+            .select('*, pets(name)')
             .eq('user_id', currentUser.id);
 
         if (!appointmentsError && appointmentsData) {
             appointments = appointmentsData;
         }
 
-        // Load prescriptions
+        // Load prescriptions with pet information
         const { data: prescriptionsData, error: prescriptionsError } = await supabaseClient
             .from('prescriptions')
-            .select('*')
+            .select('*, pets(name)')
             .eq('user_id', currentUser.id);
 
         if (!prescriptionsError && prescriptionsData) {
             prescriptions = prescriptionsData;
         }
 
-        // Load medical history
+        // Load medical history with pet information
         const { data: historyData, error: historyError } = await supabaseClient
             .from('medical_history')
-            .select('*')
+            .select('*, pets(name)')
             .eq('user_id', currentUser.id);
 
         if (!historyError && historyData) {
@@ -229,13 +229,16 @@ async function addAppointmentToSupabase(appointment) {
 
 async function updateAppointmentInSupabase(appointmentId, status) {
     try {
-        const { error } = await supabaseClient
+        const { data, error } = await supabaseClient
             .from('appointments')
             .update({ status: status })
             .eq('id', appointmentId)
-            .eq('user_id', currentUser.id);
+            .eq('user_id', currentUser.id)
+            .select()
+            .single();
 
         if (error) throw error;
+        return data;
     } catch (error) {
         console.error('Error updating appointment:', error);
         throw error;
@@ -574,7 +577,7 @@ function renderRecentActivity() {
         activities.push({
             type: 'appointment',
             date: a.date,
-            text: `Appointment for ${getPetName(a.petId)} - ${a.type}`,
+            text: `Appointment for ${getPetName(a.pet_id, a)} - ${a.type}`,
             icon: 'fa-calendar',
             color: 'blue'
         });
@@ -584,7 +587,7 @@ function renderRecentActivity() {
         activities.push({
             type: 'prescription',
             date: p.date,
-            text: `Prescription for ${getPetName(p.petId)} - ${p.medication}`,
+            text: `Prescription for ${getPetName(p.pet_id, p)} - ${p.medication}`,
             icon: 'fa-pills',
             color: 'purple'
         });
@@ -714,10 +717,6 @@ function renderPets() {
                     <p class="text-gray-500">Gender</p>
                     <p class="font-medium text-gray-800 capitalize">${pet.gender}</p>
                 </div>
-                <div>
-                    <p class="text-gray-500">Added</p>
-                    <p class="font-medium text-gray-800">${new Date(pet.createdAt).toLocaleDateString()}</p>
-                </div>
             </div>
             <div class="mt-4 flex space-x-2">
                 <button onclick="deletePet('${pet.id}')" class="flex-1 px-4 py-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition">
@@ -750,7 +749,12 @@ async function deletePet(id) {
     }
 }
 
-function getPetName(id) {
+function getPetName(id, appointment = null) {
+    // First check if appointment has pet name from the join
+    if (appointment && appointment.pets && appointment.pets.name) {
+        return appointment.pets.name;
+    }
+    // Fallback to finding in local pets array
     const pet = pets.find(p => p.id === id || p.id == id);
     return pet ? pet.name : 'Unknown Pet';
 }
@@ -838,7 +842,19 @@ function renderAppointments() {
 
     container.innerHTML = sortedAppointments.map(a => {
         const isPast = new Date(a.date) < new Date();
-        const statusColor = isPast ? 'gray' : (a.status === 'scheduled' ? 'green' : 'blue');
+        const isCancelled = a.status === 'cancelled';
+        const isDone = isPast && !isCancelled;
+
+        let statusBadge = '';
+        if (isCancelled) {
+            statusBadge = '<span class="px-3 py-1 bg-red-100 text-red-600 rounded-full text-sm">Cancelled</span>';
+        } else if (isDone) {
+            statusBadge = '<span class="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm">Done</span>';
+        } else {
+            statusBadge = '<span class="px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-sm">Scheduled</span>';
+        }
+
+        const statusColor = isCancelled ? 'red' : (isDone ? 'green' : 'blue');
 
         return `
             <div class="bg-white p-6 rounded-xl shadow-md">
@@ -848,7 +864,7 @@ function renderAppointments() {
                             <i class="fas fa-calendar-check text-${statusColor}-500 text-xl"></i>
                         </div>
                         <div>
-                            <h3 class="text-xl font-bold text-gray-800">${getPetName(a.petId)}</h3>
+                            <h3 class="text-xl font-bold text-gray-800">${getPetName(a.pet_id, a)}</h3>
                             <p class="text-gray-500 capitalize">${a.type}</p>
                         </div>
                     </div>
@@ -858,8 +874,9 @@ function renderAppointments() {
                     </div>
                 </div>
                 ${a.notes ? `<p class="mt-4 text-gray-600 bg-gray-50 p-3 rounded-lg">${a.notes}</p>` : ''}
-                <div class="mt-4 flex space-x-2">
-                    ${!isPast ? `
+                <div class="mt-4 flex justify-between items-center">
+                    ${statusBadge}
+                    ${!isPast && !isCancelled ? `
                         <button onclick="cancelAppointment('${a.id}')" class="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition">
                             <i class="fas fa-times"></i> Cancel
                         </button>
@@ -874,9 +891,15 @@ async function cancelAppointment(id) {
     if (confirm('Are you sure you want to cancel this appointment?')) {
         try {
             await updateAppointmentInSupabase(id, 'cancelled');
-            appointments = appointments.map(a =>
-                a.id === id ? { ...a, status: 'cancelled' } : a
-            );
+            // Reload appointments from Supabase to get updated data
+            const { data: appointmentsData, error: appointmentsError } = await supabaseClient
+                .from('appointments')
+                .select('*, pets(name)')
+                .eq('user_id', currentUser.id);
+
+            if (!appointmentsError && appointmentsData) {
+                appointments = appointmentsData;
+            }
             updateDashboard();
         } catch (error) {
             alert('Failed to cancel appointment: ' + error.message);
@@ -979,7 +1002,7 @@ function renderPrescriptions() {
                     </div>
                     <div>
                         <h3 class="text-xl font-bold text-gray-800">${p.medication}</h3>
-                        <p class="text-gray-500">${getPetName(p.petId)}</p>
+                        <p class="text-gray-500">${getPetName(p.pet_id, p)}</p>
                     </div>
                 </div>
                 <span class="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm">Active</span>
@@ -1042,7 +1065,7 @@ function renderHistory() {
                 </div>
                 <div>
                     <h3 class="text-xl font-bold text-gray-800">${h.title}</h3>
-                    <p class="text-gray-500">${getPetName(h.petId)}</p>
+                    <p class="text-gray-500">${getPetName(h.pet_id, h)}</p>
                 </div>
                 <div class="ml-auto text-right">
                     <p class="text-gray-800 font-medium">${new Date(h.date).toLocaleDateString()}</p>
@@ -1072,6 +1095,10 @@ async function loadModels(provider) {
     const select = document.getElementById('ai-model-select');
 
     select.innerHTML = '<option value="">Loading models...</option>';
+
+    // Remove any existing recommendation divs
+    const existingRecommendations = select.parentElement.querySelectorAll('.model-recommendation');
+    existingRecommendations.forEach(div => div.remove());
 
     try {
         if (!config.apiKey || config.apiKey.startsWith('YOUR_')) {
@@ -1117,7 +1144,7 @@ async function loadModels(provider) {
         if (recommended) {
             const recommendation = MODEL_RECOMMENDATIONS[provider];
             const recommendationDiv = document.createElement('div');
-            recommendationDiv.className = 'mt-2 text-sm text-green-600 bg-green-50 p-2 rounded';
+            recommendationDiv.className = 'mt-2 text-sm text-green-600 bg-green-50 p-2 rounded model-recommendation';
             recommendationDiv.innerHTML = `<i class="fas fa-star"></i> Recommended: ${recommended} - ${recommendation.reason}`;
             select.parentElement.appendChild(recommendationDiv);
         }
@@ -1227,7 +1254,41 @@ async function callAI(provider, model, message) {
         throw new Error(`API key not configured for ${provider}. Please configure your API key in app.js or config.js`);
     }
 
-    const systemPrompt = `You are a helpful AI pet care assistant. Provide accurate, helpful advice about pet health, nutrition, behavior, and general care. Always recommend consulting a veterinarian for serious health concerns.`;
+    // Build context from pet data
+    let petContext = '';
+    if (pets && pets.length > 0) {
+        petContext = '\n\nUser\'s Pets:\n';
+        pets.forEach(pet => {
+            petContext += `- ${pet.name} (${pet.species}, ${pet.gender})`;
+            if (pet.breed) petContext += `, Breed: ${pet.breed}`;
+            if (pet.age) petContext += `, Age: ${pet.age}`;
+            if (pet.weight) petContext += `, Weight: ${pet.weight}kg`;
+            petContext += '\n';
+
+            // Add upcoming appointments for this pet
+            const petAppointments = appointments.filter(a => a.pet_id === pet.id && new Date(a.date) >= new Date());
+            if (petAppointments.length > 0) {
+                petContext += `  Upcoming Appointments: ${petAppointments.map(a => `${a.type} on ${new Date(a.date).toLocaleDateString()} at ${a.time}`).join(', ')}\n`;
+            }
+
+            // Add active prescriptions for this pet
+            const petPrescriptions = prescriptions.filter(p => p.pet_id === pet.id && p.status === 'active');
+            if (petPrescriptions.length > 0) {
+                petContext += `  Current Medications: ${petPrescriptions.map(p => `${p.medication} (${p.dosage}, ${p.frequency})`).join(', ')}\n`;
+            }
+
+            // Add recent medical history for this pet
+            const petHistory = medicalHistory.filter(h => h.pet_id === pet.id).slice(-3);
+            if (petHistory.length > 0) {
+                petContext += `  Recent Medical History: ${petHistory.map(h => `${h.title} on ${new Date(h.date).toLocaleDateString()}`).join(', ')}\n`;
+            }
+        });
+    }
+
+    const systemPrompt = `You are a helpful AI pet care assistant for a pet owner dashboard. Provide accurate, helpful advice about pet health, nutrition, behavior, and general care based on the user's specific pets and their information.${petContext}
+
+Always consider the specific pets mentioned above when providing advice. Reference the pet by name when giving pet-specific recommendations.
+Always recommend consulting a veterinarian for serious health concerns or before making changes to medications.`;
 
     try {
         let url, headers, body;
